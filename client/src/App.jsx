@@ -1,54 +1,70 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { StoreProvider, useStore } from './useStore';
+import LoginScreen from './LoginScreen';
+import Header from './Header';
+import EmployeeAvailability from './views/EmployeeAvailability';
+import EmployeeSchedule from './views/EmployeeSchedule';
+import EmployeeHours from './views/EmployeeHours';
+import ManagerAvailability from './views/ManagerAvailability';
+import ManagerImport from './views/ManagerImport';
+import ManagerSchedule from './views/ManagerSchedule';
+import ManagerHours from './views/ManagerHours';
 
-/**
- * Scaffold landing page for Person B to build on.
- * It pings the backend health endpoint and lists seeded employees so the
- * client<->server proxy is verified. Replace with the real role switcher
- * and views (tasks B1, B4–B7).
- */
-export default function App() {
-  const [health, setHealth] = useState('checking...');
-  const [employees, setEmployees] = useState([]);
+function AppInner() {
+  const { role } = useStore();
+  const [activeTab, setActiveTab] = useState(null);
+  const [lastRole, setLastRole] = useState(null);
 
-  useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then((d) => setHealth(d.ok ? 'ok' : 'not ok'))
-      .catch(() => setHealth('unreachable (is the server running on :3001?)'));
+  // Reset tab when role changes
+  if (role !== lastRole) {
+    setLastRole(role);
+    if (role === 'manager') setActiveTab('availability');
+    else if (role === 'employee') setActiveTab('my-availability');
+    else setActiveTab(null);
+  }
 
-    fetch('/api/employees')
-      .then((r) => r.json())
-      .then(setEmployees)
-      .catch(() => setEmployees([]));
-  }, []);
+  if (!role) return <LoginScreen />;
+
+  function renderView() {
+    if (role === 'manager') {
+      switch (activeTab) {
+        case 'availability': return <ManagerAvailability />;
+        case 'import':       return <ManagerImport />;
+        case 'schedule':     return <ManagerSchedule />;
+        case 'hours':        return <ManagerHours />;
+        default:             return <ManagerAvailability />;
+      }
+    }
+    if (role === 'employee') {
+      switch (activeTab) {
+        case 'my-availability': return <EmployeeAvailability />;
+        case 'my-schedule':     return <EmployeeSchedule />;
+        case 'my-hours':        return <EmployeeHours />;
+        default:                return <EmployeeAvailability />;
+      }
+    }
+    return null;
+  }
 
   return (
-    <main className="container">
-      <h1>SmartShift</h1>
-      <p className="subtitle">Smart employee scheduling — scaffold</p>
+    <div className="app">
+      <Header
+        activeTab={activeTab}
+        setActiveTab={(tab) => setActiveTab(tab)}
+      />
+      <main className="main-content">
+        <div className="container">
+          {renderView()}
+        </div>
+      </main>
+    </div>
+  );
+}
 
-      <section className="card">
-        <h2>Backend status</h2>
-        <p>
-          API health: <strong>{health}</strong>
-        </p>
-        <h3>Seeded employees</h3>
-        {employees.length === 0 ? (
-          <p>No employees loaded yet.</p>
-        ) : (
-          <ul>
-            {employees.map((e) => (
-              <li key={e.id}>
-                #{e.id} — {e.name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <p className="hint">
-        Person B: build the role switcher and views here. See SPECIFICATION.md section 7B.
-      </p>
-    </main>
+export default function App() {
+  return (
+    <StoreProvider>
+      <AppInner />
+    </StoreProvider>
   );
 }

@@ -73,6 +73,7 @@ router.post('/generate', (req, res) => {
   const assignments = all
     .filter((a) => a.status === 'assigned')
     .map((a) => ({
+      assignmentId: a.id,
       groupId: a.group_id,
       employeeId: a.employee_id,
       status: a.status,
