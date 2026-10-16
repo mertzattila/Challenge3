@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { db } = require('../db');
+const { validateWindow } = require('../validate');
 
 const router = express.Router();
 
@@ -29,6 +30,23 @@ router.get('/all', (req, res) => {
   res.json(grouped);
 });
 
+// GET /api/availability/on-call  (MANAGER) -> employees who marked themselves on-call
+// Satisfies the brief: "See which employees have marked themselves as on-call."
+router.get('/on-call', (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT a.*, e.name AS employee_name
+         FROM availability a
+         JOIN employees e ON e.id = a.employee_id
+        WHERE a.is_on_call = 1
+        ORDER BY a.date, a.start_time`
+    )
+    .all();
+  res.json(
+    rows.map((r) => ({ ...rowToDto(r), employeeName: r.employee_name }))
+  );
+});
+
 // GET /api/availability?employeeId=  -> only that employee's rows (privacy boundary)
 router.get('/', (req, res) => {
   const employeeId = Number(req.query.employeeId);
@@ -49,6 +67,13 @@ router.post('/', (req, res) => {
       .status(400)
       .json({ error: 'employeeId, date, startTime and endTime are required' });
   }
+  const emp = db.prepare('SELECT id FROM employees WHERE id = ?').get(Number(employeeId));
+  if (!emp) {
+    return res.status(400).json({ error: `employee ${employeeId} does not exist` });
+  }
+  const windowError = validateWindow(date, startTime, endTime);
+  if (windowError) return res.status(400).json({ error: windowError });
+
   const info = db
     .prepare(
       'INSERT INTO availability (employee_id, date, start_time, end_time, is_on_call) VALUES (?,?,?,?,?)'
@@ -69,6 +94,9 @@ router.put('/:id', (req, res) => {
   const endTime = req.body.endTime ?? existing.end_time;
   const isOnCall =
     req.body.isOnCall === undefined ? existing.is_on_call : req.body.isOnCall ? 1 : 0;
+
+  const windowError = validateWindow(date, startTime, endTime);
+  if (windowError) return res.status(400).json({ error: windowError });
 
   db.prepare(
     'UPDATE availability SET date = ?, start_time = ?, end_time = ?, is_on_call = ? WHERE id = ?'

@@ -112,6 +112,51 @@ router.post('/import', (req, res) => {
   res.status(201).json({ groups: inserted, warnings: errors });
 });
 
+// POST /api/groups/import-xlsx  {fileBase64}
+// Accepts a base64-encoded .xlsx file, converts the first sheet to rows, and
+// imports via the same validation path as paste. Frontend reads the file with
+// FileReader.readAsDataURL and strips the data: prefix, or sends raw base64.
+router.post('/import-xlsx', (req, res) => {
+  const { fileBase64 } = req.body || {};
+  if (!fileBase64) {
+    return res.status(400).json({ error: 'fileBase64 is required' });
+  }
+
+  let aoa;
+  try {
+    const XLSX = require('xlsx');
+    const b64 = String(fileBase64).replace(/^data:.*;base64,/, '');
+    const buf = Buffer.from(b64, 'base64');
+    const wb = XLSX.read(buf, { type: 'buffer' });
+    const firstSheet = wb.Sheets[wb.SheetNames[0]];
+    aoa = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, defval: '' });
+  } catch (err) {
+    return res.status(400).json({ error: 'Could not parse .xlsx file', details: String(err) });
+  }
+
+  const { groups, errors } = parseRows(aoa);
+  if (groups.length === 0) {
+    return res.status(400).json({ error: 'No valid rows found in spreadsheet', details: errors });
+  }
+
+  const insert = db.prepare(
+    'INSERT INTO groups (name, date, start_time, end_time, duration_hours) VALUES (?,?,?,?,?)'
+  );
+  const tx = transaction((list) => {
+    db.prepare('DELETE FROM assignments').run();
+    db.prepare('DELETE FROM groups').run();
+    const inserted = [];
+    for (const g of list) {
+      const info = insert.run(g.name, g.date, g.startTime, g.endTime, g.durationHours);
+      inserted.push(db.prepare('SELECT * FROM groups WHERE id = ?').get(info.lastInsertRowid));
+    }
+    return inserted;
+  });
+
+  const inserted = tx(groups).map(groupRowToDto);
+  res.status(201).json({ groups: inserted, warnings: errors });
+});
+
 // GET /api/groups -> all groups (handy for the frontend)
 router.get('/', (req, res) => {
   const rows = db.prepare('SELECT * FROM groups ORDER BY date, start_time').all();

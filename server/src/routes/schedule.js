@@ -83,4 +83,58 @@ router.post('/generate', (req, res) => {
   res.json({ assignments, unassigned });
 });
 
+// GET /api/schedule/stats  (MANAGER)
+// Workload statistics per employee: assigned groups, scheduled hours (from group
+// durations), submitted actual hours, available-day count, and a normalized
+// fairness load (scheduled hours / available days). Great for demonstrating Rule 2.
+router.get('/stats', (req, res) => {
+  const employees = db.prepare('SELECT id, name FROM employees ORDER BY id').all();
+
+  const stats = employees.map((e) => {
+    const assigned = db
+      .prepare(
+        `SELECT g.duration_hours AS dur
+           FROM assignments a
+           JOIN groups g ON g.id = a.group_id
+          WHERE a.employee_id = ? AND a.status = 'assigned'`
+      )
+      .all(e.id);
+
+    const assignedGroups = assigned.length;
+    const scheduledHours = assigned.reduce((sum, r) => sum + r.dur, 0);
+
+    const submittedHours =
+      db
+        .prepare('SELECT COALESCE(SUM(hours),0) AS h FROM work_hours WHERE employee_id = ?')
+        .get(e.id).h || 0;
+
+    const availableDays =
+      db
+        .prepare('SELECT COUNT(DISTINCT date) AS c FROM availability WHERE employee_id = ?')
+        .get(e.id).c || 0;
+
+    // Normalized fairness load: scheduled hours per available day.
+    // Null when the employee has no availability (not comparable).
+    const normalizedLoad =
+      availableDays > 0 ? Number((scheduledHours / availableDays).toFixed(2)) : null;
+
+    return {
+      employeeId: e.id,
+      name: e.name,
+      assignedGroups,
+      scheduledHours: Number(scheduledHours.toFixed(2)),
+      submittedHours: Number(submittedHours.toFixed(2)),
+      availableDays,
+      normalizedLoad,
+    };
+  });
+
+  // Spread of normalized loads (lower = fairer). Useful headline metric for the demo.
+  const loads = stats.map((s) => s.normalizedLoad).filter((n) => n !== null);
+  const spread =
+    loads.length > 1 ? Number((Math.max(...loads) - Math.min(...loads)).toFixed(2)) : 0;
+
+  res.json({ perEmployee: stats, fairnessSpread: spread });
+});
+
 module.exports = router;

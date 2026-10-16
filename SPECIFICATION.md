@@ -52,9 +52,12 @@ and locally stored data are acceptable.
 | PUT  | `/api/availability/:id` | `{date, startTime, endTime, isOnCall}` | updated row |
 | DELETE | `/api/availability/:id` | — | `{ ok: true }` |
 | GET  | `/api/availability/all` | (manager) | availability grouped by employee |
+| GET  | `/api/availability/on-call` | (manager) | on-call availability rows with employee names |
 | POST | `/api/groups/import` | `{rows}` (TSV/CSV text or parsed array of name,date,start,end) | `[{id, name, date, startTime, endTime, durationHours}]` |
 | POST | `/api/schedule/generate` | — | `{assignments:[{groupId, employeeId, status, manuallyOverridden}], unassigned:[groupId...]}` |
-| PUT  | `/api/assignments/:id` | `{employeeId}` (override) | updated assignment |
+| GET  | `/api/schedule/stats` | (manager) | `{perEmployee:[{employeeId,name,assignedGroups,scheduledHours,submittedHours,availableDays,normalizedLoad}], fairnessSpread}` |
+| POST | `/api/groups/import-xlsx` | `{fileBase64}` | same shape as `/import` (parses first sheet of an .xlsx) |
+| PUT  | `/api/assignments/:id` | `{employeeId}` (override) | updated assignment incl. `warnings:[...]` if the override breaks a rule |
 | GET  | `/api/assignments/mine` | `?employeeId=` | `[{groupId, employeeId, status, ...group fields}]` |
 | POST | `/api/work-hours` | `{employeeId, groupId, date, hours}` | created row |
 | GET  | `/api/work-hours/mine` | `?employeeId=` | `[{id, employeeId, groupId, date, hours}]` |
@@ -118,6 +121,11 @@ employee id is the access boundary.
   `GET /api/work-hours/mine`, `GET /api/work-hours/all`. Scope employee endpoints by identity;
   manager-only for `/all`. Test: employee submits + reads own hours; B can't read A's; manager reads all;
   data persists across requests.
+- [x] **A-extra (done)** Backend polish + bonuses: input validation with clear messages on
+  availability + override; `GET /api/availability/on-call` (manager on-call summary);
+  `GET /api/schedule/stats` (workload statistics + fairness spread — great for the Rule 2 demo);
+  conflict-detection `warnings` on manual override (bonus); `.xlsx` import via
+  `POST /api/groups/import-xlsx`; `test/smoke.sh` end-to-end API test (14 checks, all passing).
 
 ### 7B. PERSON B — Frontend + Scheduler module (branch `frontend`)
 - [ ] **B1** Scaffold `/client` + mock API layer returning contract shapes so UI builds without backend.
