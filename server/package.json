@@ -1,0 +1,20 @@
+{
+  "name": "smartshift-server",
+  "version": "1.0.0",
+  "description": "SmartShift backend API (Express + node:sqlite)",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}
